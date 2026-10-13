@@ -1,0 +1,4 @@
+# режим аккаунта (discord2tg_self.py):
+discord.py-self
+# режим бота (discord2tg_discord.py) — ставить ВМЕСТО строки выше, оба пакета дают модуль `discord`:
+# discord.py>=2.3
