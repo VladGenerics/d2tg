@@ -61,6 +61,16 @@ def load_state():
     return st
 
 
+def admins(st=None):
+    """Primary admin plus extra admins, as a list of chat ids (strings)."""
+    st = st or load_state()
+    out = []
+    for x in [st.get("admin_chat")] + list(st.get("admins", [])):
+        if x and str(x) not in out:
+            out.append(str(x))
+    return out
+
+
 def update_state(**kw):
     """Читает свежий state, меняет только переданные ключи — процессы не затирают друг друга."""
     with _lock:
@@ -187,7 +197,8 @@ def forward(message, guild_name, channel_name):
     if not ok:
         return
     text = format_message(message, notify)
-    tg_send(text, chat=st["admin_chat"])
+    for a in admins(st):
+        tg_send(text, chat=a)
     nc = load_cfg().get("notification_chat")
-    if notify and nc and str(nc) != str(st["admin_chat"]):
+    if notify and nc and str(nc) not in admins(st):
         tg_send(text, chat=nc)

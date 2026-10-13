@@ -163,7 +163,7 @@ def handle_callback(cb):
     msg_id = cb["message"]["message_id"]
     data = cb.get("data", "")
     answer = {"callback_query_id": cb["id"]}
-    if chat_id != str(load_state().get("admin_chat", "")):
+    if chat_id not in admins():
         tg("answerCallbackQuery", **answer)
         return
     note = None
@@ -218,15 +218,19 @@ def handle_message(msg):
     st = load_state()
     admin = str(st.get("admin_chat", ""))
 
+    def reply(t, **kw):
+        kw.pop("chat", None)
+        return tg_send(t, chat=chat_id, **kw)
+
     if not admin:
         if cmd == "/start":
             update_state(admin_chat=chat_id)
-            tg_send("Hi, you're set as admin.\n\nNow send your Discord token:\n/usertoken TOKEN for your account\n/bottoken TOKEN for a bot\n\n"
+            reply("Hi, you're set as admin.\n\nNow send your Discord token:\n/usertoken TOKEN for your account\n/bottoken TOKEN for a bot\n\n"
                     "Account token: open Discord in the browser, F12, Network tab, click any request, copy the Authorization header.\n"
                     "I'll delete your message with the token right away.", chat=chat_id)
             log(f"admin: {chat_id}")
         return
-    if chat_id != admin:
+    if chat_id not in admins(st):
         return  # ignore strangers
 
     if cmd in ("/start", "/menu"):
@@ -234,14 +238,14 @@ def handle_message(msg):
     elif cmd in ("/usertoken", "/bottoken"):
         tg("deleteMessage", chat_id=chat_id, message_id=msg["message_id"])
         if not arg:
-            return tg_send(f"Usage: {cmd} TOKEN")
+            return reply(f"Usage: {cmd} TOKEN")
         save_secret(USER_TOKEN_FILE if cmd == "/usertoken" else BOT_TOKEN_FILE, arg)
         ok = Bridge.start()
-        tg_send(("Account token" if cmd == "/usertoken" else "Bot token") +
+        reply(("Account token" if cmd == "/usertoken" else "Bot token") +
                 " saved, message deleted. " + ("Starting the bridge." if ok else "Couldn't start the bridge."))
     elif cmd == "/token":
         tg("deleteMessage", chat_id=chat_id, message_id=msg["message_id"])
-        tg_send("Use /usertoken TOKEN or /bottoken TOKEN.")
+        reply("Use /usertoken TOKEN or /bottoken TOKEN.")
     elif cmd == "/reset":
         for f in (USER_TOKEN_FILE, BOT_TOKEN_FILE):
             try:
@@ -249,39 +253,53 @@ def handle_message(msg):
             except OSError:
                 pass
         Bridge.stop()
-        tg_send("Tokens deleted, bridge stopped.")
+        reply("Tokens deleted, bridge stopped.")
+    elif cmd in ("/addadmin", "/removeadmin", "/admins"):
+        if cmd == "/admins":
+            return reply("Admins: " + ", ".join(admins(st)))
+        if chat_id != admin:
+            return reply("Only the main admin can do that.")
+        if not arg.lstrip("-").isdigit():
+            return reply(f"Usage: {cmd} CHAT_ID (the person can get it from @userinfobot)")
+        extra = [x for x in st.get("admins", []) if str(x) != arg]
+        if cmd == "/addadmin":
+            extra.append(arg)
+        update_state(admins=extra)
+        reply(("Added admin " if cmd == "/addadmin" else "Removed admin ") + arg)
+        if cmd == "/addadmin":
+            tg_send("You've been added as an admin. Send /menu to start.", chat=arg)
     elif cmd == "/cancel":
         update_state(wait=None)
-        tg_send("Okay, cancelled.")
+        reply("Okay, cancelled.")
     elif cmd == "/status":
         cfg = load_cfg()
-        tg_send(f"Paused: {st.get('paused')}\nMode: {st.get('mode', '?')}\n"
+        reply(f"Paused: {st.get('paused')}\nMode: {st.get('mode', '?')}\n"
                 f"Bridge: {'running' if Bridge.proc and Bridge.proc.poll() is None else 'not running'}\n"
                 + "\n".join(f"{LABELS[k]}: {fmt_list(cfg, k)}" for k in KEYS))
     elif cmd in ("/pause", "/resume"):
         update_state(paused=(cmd == "/pause"))
-        tg_send("Paused." if cmd == "/pause" else "Resumed.")
+        reply("Paused." if cmd == "/pause" else "Resumed.")
     elif cmd == "/channels":
         known = sorted(st.get("known_channels", {}))
-        tg_send("Channels I can see:\n" + "\n".join(known) if known else "Nothing yet. The bridge hasn't connected.")
+        reply("Channels I can see:\n" + "\n".join(known) if known else "Nothing yet. The bridge hasn't connected.")
     elif cmd in ("/follow", "/unfollow"):
         # /follow user Name | /follow channel Server/#channel
         kind, _, val = arg.partition(" ")
         kind = {"user": "follow_user", "channel": "channel"}.get(kind.lower())
         if not kind or not val.strip():
-            return tg_send("Usage:\n/follow user Name\n/follow channel Server/#channel\n/unfollow does the opposite")
-        tg_send(modify_list("add" if cmd == "/follow" else "remove", kind, val.strip()))
+            return reply("Usage:\n/follow user Name\n/follow channel Server/#channel\n/unfollow does the opposite")
+        reply(modify_list("add" if cmd == "/follow" else "remove", kind, val.strip()))
     elif cmd in ("/notify_user", "/notify_keyword"):
-        tg_send(modify_list("add", cmd[1:], arg) if arg else f"Usage: {cmd} value")
+        reply(modify_list("add", cmd[1:], arg) if arg else f"Usage: {cmd} value")
     elif cmd.startswith(("/add_", "/remove_")):
         op, _, kind = cmd[1:].partition("_")
         if kind not in KEYS:
-            return tg_send("Unknown type. Use one of: " + ", ".join(KEYS))
-        tg_send(modify_list(op, kind, arg) if arg else f"Usage: {cmd} value")
+            return reply("Unknown type. Use one of: " + ", ".join(KEYS))
+        reply(modify_list(op, kind, arg) if arg else f"Usage: {cmd} value")
     elif not cmd.startswith("/") and st.get("wait"):
         w = st["wait"]
         update_state(wait=None)
-        tg_send(modify_list(w["op"], w["kind"], text))
+        reply(modify_list(w["op"], w["kind"], text))
 
 
 def tg_poll():
