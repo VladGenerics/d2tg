@@ -26,7 +26,7 @@ class Bridge(discord.Client):
         update_state(known_channels=chans, mode="bot")
         log(f"connected: {self.user} | servers: {len(self.guilds)} | channels: {len(chans)}", "[d2t]")
         await asyncio.to_thread(
-            tg_send, f"🤖 Discord: {self.user.name}\n📡 Серверов: {len(self.guilds)}, каналов: {len(chans)}")
+            tg_send, f"Bot {self.user.name} connected. Servers: {len(self.guilds)}, channels: {len(chans)}.")
 
     async def on_message(self, message):
         if message.author.bot:

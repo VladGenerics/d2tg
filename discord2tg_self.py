@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-"""discord2tg_self.py — Discord → TG (режим аккаунта).
-Требует форк:  pip install discord.py-self   (обычный discord.py токены юзеров не поддерживает)
-ВНИМАНИЕ: селфбот нарушает ToS Discord, аккаунт могут забанить.
-По умолчанию ничего не пересылается — только каналы/сервера из конфига."""
+"""Discord -> TG, account mode. Needs discord.py-self (plain discord.py can't log in with a user token).
+Note: this breaks Discord ToS, the account can get banned."""
 import asyncio, os
 import discord
 from discord2tg_common import *
@@ -31,9 +29,9 @@ class SelfBridge(discord.Client):
         update_state(known_channels=chans, mode="user")
         log(f"connected: {self.user} | servers: {len(self.guilds)} | channels: {len(chans)}", "[self]")
         await asyncio.to_thread(
-            tg_send, f"👤 Discord: {self.user}\n📡 Серверов: {len(self.guilds)}, каналов: {len(chans)}\n\n"
-                     "Пересылаю только из watch_channels / watch_servers.\n"
-                     "Добавить: /add_channel Сервер/#канал  или  /add_server Сервер")
+            tg_send, f"Connected as {self.user}. Servers: {len(self.guilds)}, channels: {len(chans)}.\n\n"
+                     "Only forwarding what's in your lists.\n"
+                     "Add with /add_channel Server/#channel or /add_server Server")
 
     async def on_message(self, message):
         if message.author.id == self.user.id:

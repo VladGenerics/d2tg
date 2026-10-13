@@ -4,22 +4,22 @@
 import os, sys, time, subprocess, threading
 from discord2tg_common import *
 
-# раздел меню -> (заголовок, [ключи из KEYS])
+# menu section -> (title, [keys from KEYS])
 SECTIONS = {
-    "channels": ("📡 Каналы", ["channel", "server", "ignore_channel"]),
-    "users": ("👤 Юзеры", ["follow_user", "user", "ignore_user"]),
-    "keywords": ("🔍 Слова", ["keyword", "exclude"]),
-    "notify": ("🔔 Уведомления", ["notify_user", "notify_keyword"]),
+    "channels": ("Channels", ["channel", "server", "ignore_channel"]),
+    "users": ("Users", ["follow_user", "user", "ignore_user"]),
+    "keywords": ("Keywords", ["keyword", "exclude"]),
+    "notify": ("Notifications", ["notify_user", "notify_keyword"]),
 }
 LABELS = {
-    "channel": "Канал (Сервер/#имя)", "server": "Сервер целиком", "ignore_channel": "Игнор-канал",
-    "follow_user": "👁 Следить за юзером (везде)", "user": "Только от юзера (в каналах)", "ignore_user": "Игнор-юзер",
-    "keyword": "Ключевое слово", "exclude": "Слово-исключение",
-    "notify_user": "🔔 Юзер", "notify_keyword": "🔔 Слово",
+    "channel": "Channel (Server/#name)", "server": "Whole server", "ignore_channel": "Ignore channel",
+    "follow_user": "Follow user (everywhere)", "user": "Only from user (in channels)", "ignore_user": "Ignore user",
+    "keyword": "Keyword", "exclude": "Exclude keyword",
+    "notify_user": "Notify user", "notify_keyword": "Notify keyword",
 }
 
 
-# ---------- управление Discord-процессом ----------
+# ---------- Discord process control ----------
 class Bridge:
     proc = None
     lock = threading.Lock()
@@ -50,7 +50,7 @@ class Bridge:
         if not s:
             return False
         with cls.lock:
-            log(f"запуск {s}")
+            log(f"starting {s}")
             cls.proc = subprocess.Popen([sys.executable, os.path.join(BASE, s)], cwd=BASE)
         return True
 
@@ -60,12 +60,12 @@ class Bridge:
             time.sleep(15)
             p = cls.proc
             if p is not None and p.poll() is not None and cls.script():
-                log(f"мост упал (код {p.returncode}), перезапуск")
+                log(f"bridge exited (code {p.returncode}), restarting")
                 time.sleep(5)
                 cls.start()
 
 
-# ---------- меню ----------
+# ---------- menu ----------
 def fmt_list(cfg, k):
     v = cfg.get(KEYS[k], [])
     return ", ".join(v) if v else "—"
@@ -74,16 +74,16 @@ def fmt_list(cfg, k):
 def main_menu():
     cfg, st = load_cfg(), load_state()
     mode = st.get("mode", "?")
-    txt = (f"🎛 Discord → TG\n\nСтатус: {'⏸ ПАУЗА' if st.get('paused') else '🟢 работает'} (режим: {mode})\n"
-           f"Серверов: {len(cfg.get('watch_servers', []))}, каналов: {len(cfg.get('watch_channels', []))}\n"
-           f"Юзеров: {len(cfg.get('watch_users', []))}, слов: {len(cfg.get('search_keywords', []))}\n\n"
-           "Пока нет ни каналов, ни серверов — ничего не пересылается.")
+    txt = (f"Discord → TG bridge\nStatus: {'paused' if st.get('paused') else 'running'} (mode: {mode})\n"
+           f"Servers: {len(cfg.get('watch_servers', []))}, channels: {len(cfg.get('watch_channels', []))}\n"
+           f"Users: {len(cfg.get('watch_users', []))}, keywords: {len(cfg.get('search_keywords', []))}\n\n"
+           "Nothing is forwarded yet. Add a channel or a server first.")
     kb = {"inline_keyboard": [
-        [{"text": "📡 Каналы", "callback_data": "menu:channels"}, {"text": "👤 Юзеры", "callback_data": "menu:users"}],
-        [{"text": "🔍 Слова", "callback_data": "menu:keywords"}, {"text": "🔔 Уведомления", "callback_data": "menu:notify"}],
-        [{"text": "⏸ Пауза / ▶️ Продолжить", "callback_data": "toggle_pause"}],
-        [{"text": "🔄 Перезапустить мост", "callback_data": "restart"},
-         {"text": "❌ Сбросить фильтры", "callback_data": "reset_filters"}],
+        [{"text": "Channels", "callback_data": "menu:channels"}, {"text": "Users", "callback_data": "menu:users"}],
+        [{"text": "Keywords", "callback_data": "menu:keywords"}, {"text": "Notifications", "callback_data": "menu:notify"}],
+        [{"text": "Pause / Resume", "callback_data": "toggle_pause"}],
+        [{"text": "Restart bridge", "callback_data": "restart"},
+         {"text": "Reset filters", "callback_data": "reset_filters"}],
     ]}
     return txt, kb
 
@@ -92,14 +92,14 @@ def section_menu(name):
     cfg = load_cfg()
     title, keys = SECTIONS[name]
     txt = title + "\n\n" + "\n".join(f"{LABELS[k]}: {fmt_list(cfg, k)}" for k in keys)
-    txt += "\n\nНажми кнопку и пришли значение. Или командой: /add_<тип> значение, /remove_<тип> значение"
+    txt += "\n\nTap a button and send the value, or type /add_<type> value"
     kb = []
     for k in keys:
         kb.append([{"text": f"➕ {LABELS[k]}", "callback_data": f"add:{k}"},
                    {"text": "➖", "callback_data": f"rm:{k}"}])
     if name == "channels":
-        kb.insert(0, [{"text": "📋 Выбрать каналы из списка", "callback_data": "pick:0"}])
-    kb.append([{"text": "◀️ Назад", "callback_data": "menu:main"}])
+        kb.insert(0, [{"text": "Pick from list", "callback_data": "pick:0"}])
+    kb.append([{"text": "◀️ Back", "callback_data": "menu:main"}])
     return txt, {"inline_keyboard": kb}
 
 
@@ -111,8 +111,8 @@ def pick_menu(page):
     known = sorted(load_state().get("known_channels", {}))
     watched = {x.lower() for x in load_cfg().get("watch_channels", [])}
     if not known:
-        return "Список каналов пуст — мост ещё не подключился к Discord.", \
-            {"inline_keyboard": [[{"text": "◀️ Назад", "callback_data": "menu:channels"}]]}
+        return "No channels yet. The bridge hasn't connected to Discord.", \
+            {"inline_keyboard": [[{"text": "◀️ Back", "callback_data": "menu:channels"}]]}
     pages = (len(known) - 1) // PAGE + 1
     page = max(0, min(page, pages - 1))
     kb = []
@@ -126,8 +126,8 @@ def pick_menu(page):
     if page < pages - 1:
         nav.append({"text": "➡️", "callback_data": f"pick:{page + 1}"})
     kb.append(nav)
-    kb.append([{"text": "◀️ Назад", "callback_data": "menu:channels"}])
-    return "Нажми на канал, чтобы следить (✅) или перестать:", {"inline_keyboard": kb}
+    kb.append([{"text": "◀️ Back", "callback_data": "menu:channels"}])
+    return "Tap a channel to follow or unfollow:", {"inline_keyboard": kb}
 
 
 def show(chat_id, msg_id, txt, kb):
@@ -144,20 +144,20 @@ def modify_list(op, kind, val):
     if op == "add":
         if val not in lst:
             lst.append(val)
-        msg = f"✅ Добавлено ({LABELS[kind]}): {val}"
+        msg = f"Added {LABELS[kind]}: {val}"
     else:
         low = [x.lower() for x in lst]
         if val.lower() in low:
             lst.pop(low.index(val.lower()))
-            msg = f"✅ Убрано ({LABELS[kind]}): {val}"
+            msg = f"Removed {LABELS[kind]}: {val}"
         else:
-            msg = f"Не найдено: {val}"
+            msg = f"Not in the list: {val}"
     cfg[key] = lst
     save_cfg(cfg)
     return msg
 
 
-# ---------- обработчики ----------
+# ---------- handlers ----------
 def handle_callback(cb):
     chat_id = str(cb["message"]["chat"]["id"])
     msg_id = cb["message"]["message_id"]
@@ -182,27 +182,27 @@ def handle_callback(cb):
             low = [x.lower() for x in lst]
             if ch.lower() in low:
                 lst.pop(low.index(ch.lower()))
-                note = "Убран"
+                note = "Removed"
             else:
                 lst.append(ch)
-                note = "Следим ✅"
+                note = "Following"
             cfg["watch_channels"] = lst
             save_cfg(cfg)
         show(chat_id, msg_id, *pick_menu(int(page)))
     elif data.startswith(("add:", "rm:")):
         op, kind = data.split(":", 1)
         update_state(wait={"op": "add" if op == "add" else "remove", "kind": kind})
-        tg_send(f"Пришли значение: {LABELS[kind]} ({'добавить' if op == 'add' else 'убрать'}). /cancel — отмена", chat=chat_id)
+        tg_send(f"Send me the {LABELS[kind]} to {'add' if op == 'add' else 'remove'}. /cancel to stop.", chat=chat_id)
     elif data == "toggle_pause":
         st = update_state(paused=not load_state().get("paused", False))
-        note = "⏸ Пауза" if st["paused"] else "▶️ Работает"
+        note = "Paused" if st["paused"] else "Running"
         show(chat_id, msg_id, *main_menu())
     elif data == "reset_filters":
         save_cfg({})
-        note = "Фильтры сброшены"
+        note = "Filters cleared"
         show(chat_id, msg_id, *main_menu())
     elif data == "restart":
-        note = "Перезапуск…" if Bridge.start() else "Нет токена Discord"
+        note = "Restarting" if Bridge.start() else "No Discord token yet"
     if note:
         answer["text"] = note
     tg("answerCallbackQuery", **answer)
@@ -221,27 +221,27 @@ def handle_message(msg):
     if not admin:
         if cmd == "/start":
             update_state(admin_chat=chat_id)
-            tg_send("✅ Ты админ.\n\nТокен Discord:\n/usertoken ТОКЕН — твой аккаунт\n/bottoken ТОКЕН — обычный бот\n\n"
-                    "Как взять токен аккаунта: Discord в браузере → F12 → Network → любой запрос → Authorization.\n"
-                    "Сообщение с токеном я сразу удалю.", chat=chat_id)
+            tg_send("Hi, you're set as admin.\n\nNow send your Discord token:\n/usertoken TOKEN for your account\n/bottoken TOKEN for a bot\n\n"
+                    "Account token: open Discord in the browser, F12, Network tab, click any request, copy the Authorization header.\n"
+                    "I'll delete your message with the token right away.", chat=chat_id)
             log(f"admin: {chat_id}")
         return
     if chat_id != admin:
-        return  # чужие игнорируем
+        return  # ignore strangers
 
     if cmd in ("/start", "/menu"):
         tg("sendMessage", chat_id=chat_id, text=main_menu()[0], reply_markup=main_menu()[1])
     elif cmd in ("/usertoken", "/bottoken"):
         tg("deleteMessage", chat_id=chat_id, message_id=msg["message_id"])
         if not arg:
-            return tg_send(f"Формат: {cmd} ТОКЕН")
+            return tg_send(f"Usage: {cmd} TOKEN")
         save_secret(USER_TOKEN_FILE if cmd == "/usertoken" else BOT_TOKEN_FILE, arg)
         ok = Bridge.start()
-        tg_send(("👤 Токен аккаунта" if cmd == "/usertoken" else "🤖 Токен бота") +
-                " сохранён, сообщение удалено. " + ("Мост перезапущен." if ok else "Мост не запущен."))
+        tg_send(("Account token" if cmd == "/usertoken" else "Bot token") +
+                " saved, message deleted. " + ("Starting the bridge." if ok else "Couldn't start the bridge."))
     elif cmd == "/token":
         tg("deleteMessage", chat_id=chat_id, message_id=msg["message_id"])
-        tg_send("Используй явно: /usertoken ТОКЕН (аккаунт) или /bottoken ТОКЕН (бот).")
+        tg_send("Use /usertoken TOKEN or /bottoken TOKEN.")
     elif cmd == "/reset":
         for f in (USER_TOKEN_FILE, BOT_TOKEN_FILE):
             try:
@@ -249,35 +249,35 @@ def handle_message(msg):
             except OSError:
                 pass
         Bridge.stop()
-        tg_send("🗑 Токены удалены, мост остановлен.")
+        tg_send("Tokens deleted, bridge stopped.")
     elif cmd == "/cancel":
         update_state(wait=None)
-        tg_send("Отменено.")
+        tg_send("Okay, cancelled.")
     elif cmd == "/status":
         cfg = load_cfg()
-        tg_send(f"⏸ Пауза: {st.get('paused')}\nРежим: {st.get('mode', '?')}\n"
-                f"Мост: {'жив' if Bridge.proc and Bridge.proc.poll() is None else 'не запущен'}\n"
+        tg_send(f"Paused: {st.get('paused')}\nMode: {st.get('mode', '?')}\n"
+                f"Bridge: {'running' if Bridge.proc and Bridge.proc.poll() is None else 'not running'}\n"
                 + "\n".join(f"{LABELS[k]}: {fmt_list(cfg, k)}" for k in KEYS))
     elif cmd in ("/pause", "/resume"):
         update_state(paused=(cmd == "/pause"))
-        tg_send("⏸ Пауза включена" if cmd == "/pause" else "▶️ Пауза снята")
+        tg_send("Paused." if cmd == "/pause" else "Resumed.")
     elif cmd == "/channels":
         known = sorted(st.get("known_channels", {}))
-        tg_send("Известные каналы:\n" + "\n".join(known) if known else "Список пуст (мост ещё не подключился).")
+        tg_send("Channels I can see:\n" + "\n".join(known) if known else "Nothing yet. The bridge hasn't connected.")
     elif cmd in ("/follow", "/unfollow"):
-        # /follow user Имя | /follow channel Сервер/#канал
+        # /follow user Name | /follow channel Server/#channel
         kind, _, val = arg.partition(" ")
         kind = {"user": "follow_user", "channel": "channel"}.get(kind.lower())
         if not kind or not val.strip():
-            return tg_send("Формат:\n/follow user Имя\n/follow channel Сервер/#канал\n(/unfollow — убрать)")
+            return tg_send("Usage:\n/follow user Name\n/follow channel Server/#channel\n/unfollow does the opposite")
         tg_send(modify_list("add" if cmd == "/follow" else "remove", kind, val.strip()))
     elif cmd in ("/notify_user", "/notify_keyword"):
-        tg_send(modify_list("add", cmd[1:], arg) if arg else f"Формат: {cmd} значение")
+        tg_send(modify_list("add", cmd[1:], arg) if arg else f"Usage: {cmd} value")
     elif cmd.startswith(("/add_", "/remove_")):
         op, _, kind = cmd[1:].partition("_")
         if kind not in KEYS:
-            return tg_send("Неизвестный тип. Доступно: " + ", ".join(KEYS))
-        tg_send(modify_list(op, kind, arg) if arg else f"Формат: {cmd} значение")
+            return tg_send("Unknown type. Use one of: " + ", ".join(KEYS))
+        tg_send(modify_list(op, kind, arg) if arg else f"Usage: {cmd} value")
     elif not cmd.startswith("/") and st.get("wait"):
         w = st["wait"]
         update_state(wait=None)
@@ -308,11 +308,11 @@ def tg_poll():
 
 
 if __name__ == "__main__":
-    tg_token()  # fail fast, если токена нет
+    tg_token()  # fail fast if no token
     if Bridge.start():
-        log("мост запущен")
+        log("bridge started")
     else:
-        log("нет токена Discord — жду /usertoken или /bottoken в TG")
+        log("no Discord token yet, waiting for /usertoken or /bottoken")
     threading.Thread(target=Bridge.watchdog, daemon=True).start()
     try:
         tg_poll()

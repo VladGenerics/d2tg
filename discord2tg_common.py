@@ -9,7 +9,7 @@ BOT_TOKEN_FILE = os.path.join(BASE, ".discord_token")
 USER_TOKEN_FILE = os.path.join(BASE, ".discord_user_token")
 TG_TOKEN_FILE = os.path.join(BASE, ".tg_token")
 
-# ключ в команде -> ключ в конфиге
+# command key -> config key
 KEYS = {
     "channel": "watch_channels", "server": "watch_servers", "user": "watch_users",
     "keyword": "search_keywords", "exclude": "search_exclude",
@@ -33,7 +33,7 @@ def tg_token():
         except OSError:
             t = ""
     if not t:
-        raise SystemExit(f"Нет токена Telegram: задай TG_TOKEN или положи в {TG_TOKEN_FILE}")
+        raise SystemExit(f"No Telegram token. Set TG_TOKEN or put it in {TG_TOKEN_FILE}")
     return t
 
 
@@ -134,7 +134,7 @@ def should_forward(guild, channel, author, content):
     a = str(author).lower()
     if ch_full in low(cfg.get("ignore_channels", [])):
         return False, False
-    # follow_user: пропускаем всё от этого юзера из любого канала, без остальных фильтров
+    # follow_user: let everything from this user through, skip other filters
     if a in low(cfg.get("follow_users", [])):
         return True, a in low(cfg.get("notify_users", []))
     if not ((guild and guild.lower() in ws) or ch_full in wc):
@@ -172,7 +172,7 @@ def format_message(message, notify=False):
         if t:
             parts.append("▫️ " + t[:500])
     for s in getattr(message, "stickers", [])[:3]:
-        parts.append(f"🏷 стикер: {s.name}")
+        parts.append(f"[sticker: {s.name}]")
     parts += ["📎 " + a.url for a in message.attachments[:5]]
     return "\n".join(parts)
 
