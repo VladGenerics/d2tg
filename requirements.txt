@@ -1,4 +1,3 @@
-# режим аккаунта (discord2tg_self.py):
+# Account mode (discord2tg_self.py). Install only this one.
+# Don't keep it next to discord.py, both packages provide the `discord` module.
 discord.py-self
-# режим бота (discord2tg_discord.py) — ставить ВМЕСТО строки выше, оба пакета дают модуль `discord`:
-# discord.py>=2.3

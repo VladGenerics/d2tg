@@ -7,42 +7,37 @@ from discord2tg_common import *
 
 
 def get_token():
-    env = os.environ.get("DISCORD_USER_TOKEN", "").strip()
-    if env:
-        return env
-    try:
-        return open(USER_TOKEN_FILE).read().strip()
-    except OSError:
-        return ""
+    return os.environ.get("DISCORD_USER_TOKEN", "").strip() or read_secret(USER_TOKEN_FILE)
 
 
-class SelfBridge(discord.Client):
+class SelfBridge(RefreshMixin, discord.Client):
+    mode = "user"
+    announced = False  # on_ready also fires on reconnects, greet only once
+
     async def on_ready(self):
-        chans = {}
-        for g in self.guilds:
-            for c in g.text_channels:
-                try:
-                    if c.permissions_for(g.me).read_messages:
-                        chans[f"{g.name}/#{c.name}"] = c.id
-                except Exception:
-                    pass
-        update_state(known_channels=chans, mode="user")
+        chans = await self.refresh()
         log(f"connected: {self.user} | servers: {len(self.guilds)} | channels: {len(chans)}", "[self]")
+        if self.announced:
+            return
+        self.announced = True
         await asyncio.to_thread(
             tg_send, f"Connected as {self.user}. Servers: {len(self.guilds)}, channels: {len(chans)}.\n\n"
                      "Only forwarding what's in your lists.\n"
-                     "Add with /add_channel Server/#channel or /add_server Server")
+                     "Paste a channel link to follow it, or use /add_server Server")
 
     async def on_message(self, message):
         if message.author.id == self.user.id:
             return
-        guild = message.guild.name if message.guild else None
-        await asyncio.to_thread(forward, message, guild, str(message.channel.name if guild else message.channel))
+        await forward_async(message)
 
 
 if __name__ == "__main__":
     tok = get_token()
     if not tok:
-        log("no user token", "[self]")
-        raise SystemExit(1)
-    SelfBridge().run(tok)
+        fatal("No Discord account token. Send /usertoken TOKEN to the Telegram bot.", "[self]")
+    warn_libs("discord.py-self", "discord.py")
+    try:
+        SelfBridge().run(tok)
+    except discord.LoginFailure:
+        fatal("Discord rejected the account token (expired/wrong). Send a fresh /usertoken TOKEN. "
+              "Also make sure discord.py-self (not discord.py) is installed.", "[self]")

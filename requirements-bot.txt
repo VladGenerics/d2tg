@@ -1,0 +1,2 @@
+# Bot mode (discord2tg_discord.py). Install this INSTEAD of requirements.txt (a separate venv is best).
+discord.py>=2.3
