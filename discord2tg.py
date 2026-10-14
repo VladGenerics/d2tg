@@ -5,6 +5,8 @@ Optional: TG_ADMIN_CHAT=<chat id> so only that chat can claim admin with /start.
 import os, re, signal, subprocess, sys, threading, time, zlib
 from discord2tg_common import *
 
+CODE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # menu section -> (title, [keys from KEYS])
 SECTIONS = {
     "channels": ("Channels", ["channel", "server", "ignore_channel"]),
@@ -67,7 +69,7 @@ class Bridge:
                 cls.fails = 0
             update_state(bridge_error=None)
             log(f"starting {s}")
-            cls.proc = subprocess.Popen([sys.executable, "-u", os.path.join(BASE, s)], cwd=BASE)
+            cls.proc = subprocess.Popen([sys.executable, "-u", os.path.join(CODE_DIR, s)], cwd=BASE)
             cls.started, cls.retry_at = time.time(), None
         return True
 
