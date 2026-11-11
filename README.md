@@ -2,8 +2,8 @@
 
 ## Ignore messages in one channel
 
-New forwarded messages include an **Ignore similar messages…** button. Press it,
-check the suggested text, then confirm **Ignore this text in this channel**.
+New forwarded messages include an **Ignore similar** button. Press it,
+check the suggested text, then confirm **Ignore**.
 You can send your own text fragment instead, or cancel. For statistics embeds,
 the suggestion is `Messages Sent:`; for the warning it uses the text before the
 Discord timestamp. Counts and other text can change without affecting a match.

@@ -345,7 +345,7 @@ def forward(message, guild_name, channel_name, parent_name=None, ids=(), guild_i
     text = format_message(message, notify, chan_tag(load_cfg(), ids))
     cid = str(getattr(message.channel, "id", ""))
     # Keep source ids on the button, even when the displayed channel is aliased.
-    kb = {"inline_keyboard": [[{"text": "Ignore similar messages…", "callback_data": f"msgignore:{cid}"}]]} if cid.isdigit() else None
+    kb = {"inline_keyboard": [[{"text": "Ignore similar", "callback_data": f"msgignore:{cid}"}]]} if cid.isdigit() else None
     for adm in admins(st):
         tg_send(text, chat=adm, **({"reply_markup": kb} if kb else {}))
     nc = load_cfg().get("notification_chat")

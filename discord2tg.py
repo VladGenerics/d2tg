@@ -667,11 +667,11 @@ def _callback(cb, chat_id, msg_id, data):
         token = str(crc(f"{cid}:{msg_id}:{needle}"))
         update_state(wait={"op": "ignore_text", "cid": cid, "text": needle,
                            "token": token, "chat": chat_id})
-        buttons = [[{"text": "Ignore this text in this channel", "callback_data": f"msgignore_ok:{token}"}]] if needle else []
+        buttons = [[{"text": "Ignore", "callback_data": f"msgignore_ok:{token}"}]] if needle else []
         buttons.append([{"text": "Cancel", "callback_data": f"msgignore_cancel:{token}"}])
-        tg_send("Ignore messages containing this text only in this channel:\n\n"
+        tg_send("Ignore messages containing this text in this channel?\n\n"
                 + (needle or "(No text found)")
-                + "\n\nConfirm below, or send a different text fragment. Other messages in the channel will still be forwarded. /cancel to stop.",
+                + "\n\nYou can also send a different text fragment.",
                 chat=chat_id, reply_markup={"inline_keyboard": buttons})
         return "Choose the text to ignore"
     elif data.startswith(("msgignore_ok:", "msgignore_cancel:")):
@@ -685,7 +685,7 @@ def _callback(cb, chat_id, msg_id, data):
             show(chat_id, msg_id, "Cancelled.", {"inline_keyboard": []})
             return "Cancelled"
         result = modify_message_ignore("/ignore_text", f"{pending['cid']} | {pending['text']}")
-        show(chat_id, msg_id, result + "\nOther messages in this channel are still forwarded.\n/ignores to list; /unignore_text to undo.",
+        show(chat_id, msg_id, result + "\n/ignores to view filters.",
              {"inline_keyboard": []})
         return "Message filter saved"
     elif data.startswith("menu:"):
