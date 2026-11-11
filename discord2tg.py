@@ -22,6 +22,46 @@ LABELS = {
     "notify_user": "Notify user", "notify_keyword": "Notify keyword",
 }
 LINK_RE = re.compile(r"https?://(?:[\w-]+\.)?discord(?:app)?\.com/channels/(@me|\d+)(?:/(\d+))?", re.I)
+MESSAGE_LINK_RE = re.compile(
+    r"https?://(?:[\w-]+\.)?discord(?:app)?\.com/channels/(?:@me|\d+)/(\d+)/(\d+)/?", re.I)
+
+
+def modify_message_ignore(cmd, arg):
+    """Manage explicit message ids and channel-scoped literal text rules."""
+    cfg = load_cfg()
+    if cmd == "/ignores":
+        lines = [f"{r['channel']} | {r['text']}" for r in cfg.get("ignore_text", [])]
+        lines += [f"Message: {mid}" for mid in cfg.get("ignore_messages", [])]
+        return "Message ignores:\n" + ("\n".join(lines) or "-")
+    add = cmd.startswith("/ignore_")
+    if cmd.endswith("_message"):
+        match = MESSAGE_LINK_RE.fullmatch(arg.strip())
+        if not match and not arg.isdigit():
+            return f"Usage: {cmd} Discord-message-link (or message id)"
+        value = match.group(2) if match else arg
+        key = "ignore_messages"
+        matches = lambda item: str(item) == value
+    else:
+        channel, sep, text = arg.partition("|")
+        if not sep or not channel.strip() or not text.strip():
+            return f"Usage: {cmd} channel-link-or-id-or-Server/#channel | text to ignore"
+        channel, err = resolve_channel(channel)
+        if err:
+            return err
+        value = {"channel": channel, "text": text.strip()}
+        aliases = chan_aliases(channel)
+        key = "ignore_text"
+        matches = lambda item: (norm_channel(str(item["channel"])).lower() in aliases
+                                and str(item["text"]).lower() == value["text"].lower())
+    entries = cfg.get(key, [])
+    found = any(matches(item) for item in entries)
+    if add and not found:
+        entries.append(value)
+    elif not add:
+        entries = [item for item in entries if not matches(item)]
+    cfg[key] = entries
+    save_cfg(cfg)
+    return ("Ignored: " if add else "Unignored: ") + str(value)
 
 
 # ---------- Discord process control ----------
@@ -417,7 +457,10 @@ def section_menu(name):
     txt += "\n\nTap a button and send the value, or type /add_<type> value"
     if name == "channels":
         txt += ("\nYou can also paste a Discord channel or server link. Both are tracked by id, "
-                "so renames don't break anything.")
+                "so renames don't break anything.\n"
+                "Ignore matching text only here: /ignore_text channel | text\n"
+                "Ignore one message: /ignore_message Discord-message-link\n"
+                "List: /ignores; undo: /unignore_text or /unignore_message")
     kb = []
     for k in keys:
         rm = "Unignore" if k.startswith("ignore") else "Remove"
@@ -924,6 +967,8 @@ def handle_message(msg):
         if not arg:
             return reply(f"Usage: {cmd} Server/#channel (or a Discord channel link)")
         reply(modify_list("add" if cmd == "/ignore" else "remove", "ignore_channel", arg))
+    elif cmd in ("/ignore_text", "/unignore_text", "/ignore_message", "/unignore_message", "/ignores"):
+        reply(modify_message_ignore(cmd, arg))
     elif cmd in ("/notify_user", "/notify_keyword"):
         reply(modify_list("add", cmd[1:], arg) if arg else f"Usage: {cmd} value")
     elif cmd.startswith(("/add_", "/remove_")):

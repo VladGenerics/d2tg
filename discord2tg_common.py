@@ -224,7 +224,8 @@ def norm_channel(v):
     return f"{g.strip()}/#{c.strip().lstrip('#').strip()}"
 
 
-def should_forward(guild, channel, author, content, parent=None, ids=(), guild_id=None):
+def should_forward(guild, channel, author, content, parent=None, ids=(), guild_id=None,
+                   message_id=None, embed_text=""):
     """Returns (forward?, is it a notify?).
     author is a string or a set of identifiers (display name, username, id).
     parent is the parent channel name when the message comes from a thread.
@@ -251,6 +252,16 @@ def should_forward(guild, channel, author, content, parent=None, ids=(), guild_i
 
     if chans & ign or by_id("ignore_channels"):  # ignored channel (or thread parent) wins over everything, even follow_users
         return False, False
+    if message_id is not None and str(message_id) in {str(x) for x in cfg.get("ignore_messages", [])}:
+        return False, False
+    # Explicit scoped ignores win over follow_users too. Include embeds here,
+    # without changing the existing global keyword/watch/notification semantics.
+    scoped_text = "\n".join((text, embed_text or "")).lower()
+    for rule in cfg.get("ignore_text", []):
+        scope = norm_channel(str(rule.get("channel", ""))).lower()
+        needle = str(rule.get("text", "")).strip().lower()
+        if scope in chans | chan_ids and needle and needle in scoped_text:
+            return False, False
     # follow_user: let everything from this user through, skip the other filters
     if hit("follow_users"):
         return True, notify
@@ -307,6 +318,16 @@ def format_message(message, notify=False, tag=(None, None)):
     return "\n".join(parts)
 
 
+def message_embed_text(message):
+    """Search all embed text, including fields used by statistics bots."""
+    parts = []
+    for embed in getattr(message, "embeds", []):
+        parts.extend(x for x in (embed.title, embed.description) if x)
+        for field in getattr(embed, "fields", []):
+            parts.extend(x for x in (field.name, field.value) if x)
+    return "\n".join(parts)
+
+
 def forward(message, guild_name, channel_name, parent_name=None, ids=(), guild_id=None):
     """Blocking part: filters + sending. Call it through forward_async."""
     st = load_state()
@@ -316,7 +337,9 @@ def forward(message, guild_name, channel_name, parent_name=None, ids=(), guild_i
     who = (a.display_name, getattr(a, "name", None), str(getattr(a, "id", "")))
     ok, notify = should_forward(guild_name, channel_name, who,
                                 getattr(message, "clean_content", None) or message.content,
-                                parent=parent_name, ids=ids, guild_id=guild_id)
+                                parent=parent_name, ids=ids, guild_id=guild_id,
+                                message_id=getattr(message, "id", None),
+                                embed_text=message_embed_text(message))
     if not ok:
         return
     text = format_message(message, notify, chan_tag(load_cfg(), ids))
