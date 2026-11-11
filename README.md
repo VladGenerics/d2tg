@@ -2,6 +2,14 @@
 
 ## Ignore messages in one channel
 
+New forwarded messages include an **Ignore similar messages…** button. Press it,
+check the suggested text, then confirm **Ignore this text in this channel**.
+You can send your own text fragment instead, or cancel. For statistics embeds,
+the suggestion is `Messages Sent:`; for the warning it uses the text before the
+Discord timestamp. Counts and other text can change without affecting a match.
+The channel itself remains enabled. Older messages without buttons can still
+be filtered using the commands below.
+
 Send these commands to the Telegram control bot as an admin. Replace `CHANNEL_ID`
 with the Discord channel ID, channel link, or `Server/#channel` name. IDs survive
 channel renames; `/channels` lists known channel names.

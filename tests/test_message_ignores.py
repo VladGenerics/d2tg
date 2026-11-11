@@ -84,6 +84,43 @@ class MessageIgnoresTest(unittest.TestCase):
         self.cfg["ignore_channels"] = ["10"]
         self.assertEqual(self.forward(), (False, False))
 
+    def test_button_preview_confirm_and_cancel(self):
+        state = {"admin_chat": "1"}
+        def update(**values):
+            state.update(values)
+            return state
+        cb = {"message": {"text": "Bot (Guild/#general)\nreply to User: g.m\n⚠️ **Prefix commands will be removed on <t:1795996800:D>\nTry /messages"}}
+        with patch.object(control, "load_state", side_effect=lambda: state), patch.object(control, "update_state", side_effect=update), patch.object(control, "tg_send"), patch.object(control, "show"):
+            control._callback(cb, "1", 55, "msgignore:10")
+            pending = state["wait"].copy()
+            self.assertEqual(pending["text"], "⚠️ **Prefix commands will be removed on")
+            self.assertNotIn("ignore_text", self.cfg)
+            control._callback({}, "1", 56, "msgignore_ok:stale")
+            self.assertNotIn("ignore_text", self.cfg)
+            control._callback({}, "2", 56, "msgignore_ok:" + pending["token"])
+            self.assertNotIn("ignore_text", self.cfg)
+            control._callback({}, "1", 56, "msgignore_ok:" + pending["token"])
+            self.assertEqual(self.forward(cb["message"]["text"]), (False, False))
+            self.assertEqual(self.forward("ordinary chat"), (True, False))
+            control._callback({"message": {"text": "Bot (Guild/#general)\n> Messages Sent:\n\nToday: **9**"}}, "1", 57, "msgignore:10")
+            self.assertEqual(state["wait"]["text"], "Messages Sent:")
+            control._callback({}, "1", 58, "msgignore_cancel:" + state["wait"]["token"])
+            self.assertEqual(len(self.cfg["ignore_text"]), 1)
+
+    def test_custom_fragment_from_button(self):
+        reply = unittest.mock.Mock()
+        control.handle_wait({"op": "ignore_text", "cid": "10"}, "Messages Sent:", "1", reply)
+        self.assertEqual(self.forward(embed_text="Messages Sent:\nToday: **31**"), (False, False))
+        self.assertEqual(self.forward("Messages Sent:", "other", (20,)), (True, False))
+        reply.assert_called_once()
+
+    def test_forward_includes_source_channel_button(self):
+        message = NS(id=100, content="hello", clean_content="hello", embeds=[],
+                     channel=NS(id=10), author=NS(display_name="bot", name="bot", id=1))
+        with patch.object(common, "load_state", return_value={"admin_chat": "1"}), patch.object(common, "format_message", return_value="Bot (Alias)\nhello"), patch.object(common, "tg_send") as send:
+            common.forward(message, "Guild", "general", ids=(10,))
+        self.assertEqual(send.call_args.kwargs["reply_markup"]["inline_keyboard"][0][0]["callback_data"], "msgignore:10")
+
 
 if __name__ == "__main__":
     unittest.main()

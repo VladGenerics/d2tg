@@ -653,7 +653,42 @@ def show(chat_id, msg_id, txt, kb):
 # ---------- handlers ----------
 def _callback(cb, chat_id, msg_id, data):
     """Returns a short toast text (or None)."""
-    if data.startswith("menu:"):
+    if data.startswith("msgignore:"):
+        cid = data.split(":", 1)[1]
+        if not cid.isdigit():
+            return "Invalid channel"
+        # The first line is the bridge header, the optional second is a reply
+        # preview. Match the actual body/embed, never the channel or author.
+        lines = (cb.get("message", {}).get("text") or "").splitlines()[1:]
+        if lines and lines[0].startswith("reply to "):
+            lines.pop(0)
+        needle = next((line.removeprefix("> ").strip() for line in lines if line.strip()), "")
+        needle = needle.split("<t:", 1)[0].rstrip()[:200]
+        token = str(crc(f"{cid}:{msg_id}:{needle}"))
+        update_state(wait={"op": "ignore_text", "cid": cid, "text": needle,
+                           "token": token, "chat": chat_id})
+        buttons = [[{"text": "Ignore this text in this channel", "callback_data": f"msgignore_ok:{token}"}]] if needle else []
+        buttons.append([{"text": "Cancel", "callback_data": f"msgignore_cancel:{token}"}])
+        tg_send("Ignore messages containing this text only in this channel:\n\n"
+                + (needle or "(No text found)")
+                + "\n\nConfirm below, or send a different text fragment. Other messages in the channel will still be forwarded. /cancel to stop.",
+                chat=chat_id, reply_markup={"inline_keyboard": buttons})
+        return "Choose the text to ignore"
+    elif data.startswith(("msgignore_ok:", "msgignore_cancel:")):
+        action, token = data.split(":", 1)
+        pending = load_state().get("wait") or {}
+        if (pending.get("op") != "ignore_text" or pending.get("chat") != chat_id
+                or pending.get("token") != token):
+            return "This prompt expired. Use the message button again."
+        update_state(wait=None)
+        if action == "msgignore_cancel":
+            show(chat_id, msg_id, "Cancelled.", {"inline_keyboard": []})
+            return "Cancelled"
+        result = modify_message_ignore("/ignore_text", f"{pending['cid']} | {pending['text']}")
+        show(chat_id, msg_id, result + "\nOther messages in this channel are still forwarded.\n/ignores to list; /unignore_text to undo.",
+             {"inline_keyboard": []})
+        return "Message filter saved"
+    elif data.startswith("menu:"):
         name = data[5:]
         show(chat_id, msg_id, *(main_menu() if name == "main" else section_menu(name)))
     elif data.startswith("pick:"):
@@ -838,6 +873,8 @@ def offer_link(chat_id, m):
 def handle_wait(w, text, chat_id, reply):
     """The user answered a 'send me the value' prompt."""
     op = w.get("op")
+    if op == "ignore_text":
+        return reply(modify_message_ignore("/ignore_text", f"{w['cid']} | {text}"))
     if op in ("add", "remove"):
         return reply(modify_list(op, w["kind"], text))
     screen = lambda scr: tg("sendMessage", chat_id=chat_id, text=scr[0], reply_markup=scr[1])
